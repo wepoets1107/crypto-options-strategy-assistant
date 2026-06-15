@@ -197,6 +197,12 @@ textarea:focus {
   line-height: 1.55;
 }
 
+.brief-title {
+  margin-top: 4px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
 .strategy-panel {
   margin-bottom: 14px;
 }

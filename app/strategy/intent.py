@@ -27,6 +27,16 @@ def _target_move_from_text(text: str) -> float | None:
 
 def _capital_from_text(text: str) -> float | None:
     text = text.replace(",", "")
+    capital_patterns = [
+        r"(?:我有|本金|资金|预算|仓位|账户)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+        r"(?:我有|本金|资金|预算|仓位|账户)\D{0,8}?(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+    ]
+    for pattern in capital_patterns:
+        match = re.search(pattern, text)
+        if match:
+            number = float(match.group(1))
+            return number * 10000 if match.group(2) else number
+
     patterns = [
         r"(?:我有|本金|资金|预算|仓位|账户)\s*(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt|美元|美金|刀)",
         r"(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt)\b",
@@ -39,15 +49,39 @@ def _capital_from_text(text: str) -> float | None:
     return None
 
 
+def _money_amount(value: str, unit: str | None) -> float:
+    number = float(value)
+    return number * 10000 if unit == "万" else number
+
+
+def _target_range_from_text(text: str) -> dict[str, float] | None:
+    text = text.replace(",", "")
+    patterns = [
+        r"(\d+(?:\.\d+)?)\s*(万)?\s*(?:到|至|-|~)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:之间|区间|附近|内)?",
+        r"(\d+(?:\.\d+)?)\s*(万)?\s*(?:和|与)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:之间|区间|附近|内)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        first = _money_amount(match.group(1), match.group(2) or match.group(4))
+        second = _money_amount(match.group(3), match.group(4) or match.group(2))
+        low, high = sorted([first, second])
+        if high > low > 0:
+            return {"lower": low, "upper": high}
+    return None
+
+
 def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> dict[str, Any]:
     lower = text.lower()
+    target_range = _target_range_from_text(text)
     direction = (quick or {}).get("direction") or "unknown"
     if direction == "unknown":
         if any(word in text for word in ["看涨", "上涨", "涨", "暴涨", "突破", "牛市"]):
             direction = "bullish"
         elif any(word in text for word in ["看跌", "下跌", "跌", "回落", "熊市"]):
             direction = "bearish"
-        elif any(word in text for word in ["横盘", "震荡", "区间", "不涨不跌"]):
+        elif target_range or any(word in text for word in ["横盘", "震荡", "区间", "不涨不跌", "做空波动", "空波动率", "卖波动率", "之间波动", "范围内"]):
             direction = "range"
         elif any(word in text for word in ["大波动", "波动很大", "方向不确定", "暴涨暴跌"]):
             direction = "volatile"
@@ -68,7 +102,7 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> 
         elif direction == "bullish":
             target_price = spot + target_move
 
-    income_preference = any(word in text for word in ["收权利金", "卖期权", "赚时间价值", "卖方", "不跌破", "不涨破"])
+    income_preference = any(word in text for word in ["收权利金", "卖期权", "赚时间价值", "卖方", "不跌破", "不涨破", "做空波动", "空波动率", "卖波动率"])
     advanced = any(word in lower for word in ["advanced", "ratio", "short straddle", "short strangle"]) or any(
         word in text for word in ["高级", "比例价差", "裸卖", "双卖"]
     )
@@ -78,6 +112,7 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> 
         "horizon_days": horizon_days,
         "target_move_usd": target_move,
         "target_price": target_price,
+        "target_range": target_range,
         "capital_usd": _capital_from_text(text),
         "risk_profile": "advanced" if advanced else "beginner",
         "income_preference": income_preference,
@@ -90,6 +125,7 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float)
     horizon_days = int(raw.get("horizon_days") or fallback["horizon_days"] or 30)
     target_move = raw.get("target_move_usd")
     target_price = raw.get("target_price")
+    target_range = raw.get("target_range") or fallback.get("target_range")
     if target_price is None and target_move is not None:
         target_price = spot + float(target_move) if direction == "bullish" else spot - float(target_move)
     return {
@@ -98,6 +134,7 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float)
         "horizon_days": max(1, min(horizon_days, 180)),
         "target_move_usd": float(target_move) if target_move is not None else fallback.get("target_move_usd"),
         "target_price": float(target_price) if target_price is not None else fallback.get("target_price"),
+        "target_range": target_range,
         "capital_usd": float(raw.get("capital_usd")) if raw.get("capital_usd") is not None else fallback.get("capital_usd"),
         "risk_profile": raw.get("risk_profile") or fallback.get("risk_profile", "beginner"),
         "income_preference": bool(raw.get("income_preference", fallback.get("income_preference", False))),

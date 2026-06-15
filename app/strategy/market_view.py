@@ -16,6 +16,14 @@ def classify_iv(atm_iv: float | None) -> str:
     return "normal"
 
 
+def iv_label(iv_view: str) -> str:
+    return {"cheap": "偏低", "normal": "中性", "expensive": "偏高"}.get(iv_view, "未知")
+
+
+def flow_label(flow: str) -> str:
+    return {"call_heavy": "大额成交偏 Call", "put_heavy": "大额成交偏 Put", "balanced": "大额成交相对均衡"}.get(flow, "大额成交不明确")
+
+
 def build_market_view(market: dict[str, Any], intent: dict[str, Any]) -> dict[str, Any]:
     spot = float(market["spot"])
     features = market_features(market["options"], spot, int(intent["horizon_days"]))
@@ -24,6 +32,7 @@ def build_market_view(market: dict[str, Any], intent: dict[str, Any]) -> dict[st
     skew = features.get("skew_25d")
     trade_bias = market.get("trade_bias", {}).get("bias", "balanced")
     target_price = intent.get("target_price")
+    target_range = intent.get("target_range") or {}
     expected_move = None
     target_z = None
     if atm_iv:
@@ -71,6 +80,32 @@ def build_market_view(market: dict[str, Any], intent: dict[str, Any]) -> dict[st
     alignment = "supports" if score >= 0.65 else "partially_supports" if score >= 0.45 else "does_not_support"
     if not reasons:
         reasons.append("市场信号较均衡，策略需要以控制亏损为优先。")
+    diagnostics = [
+        f"到期选择：选择 {features['selected_expiry_label']}，约 {features['selected_expiry_days']:.1f} 天，覆盖用户的 {intent['horizon_days']} 天观点周期。",
+    ]
+    if atm_iv is not None:
+        diagnostics.append(f"波动率：ATM IV 约 {atm_iv:.1f}%，系统判断为{iv_label(iv_view)}。IV 偏低时，买期权成本相对不贵；IV 偏高时，更适合谨慎考虑收权利金结构。")
+    if skew is not None:
+        if skew < -1:
+            diagnostics.append(f"偏度：25D Skew 为 {skew:.2f}，Put 相对 Call 更贵，说明市场仍愿意为下跌保护付费。")
+        elif skew > 1:
+            diagnostics.append(f"偏度：25D Skew 为 {skew:.2f}，Call 相对 Put 更贵，说明上行需求更强。")
+        else:
+            diagnostics.append(f"偏度：25D Skew 为 {skew:.2f}，两边定价比较接近，没有明显单边情绪。")
+    flow = market.get("trade_bias", {})
+    diagnostics.append(
+        f"大额成交：{flow_label(trade_bias)}；24小时大额 Call 数量约 {flow.get('large_call_amount', 0):.0f}，Put 数量约 {flow.get('large_put_amount', 0):.0f}。"
+    )
+    if expected_move is not None:
+        diagnostics.append(f"隐含波动范围：按当前 IV 粗略估算，{intent['horizon_days']} 天一倍隐含波动约为 ${expected_move:,.0f}。")
+    if target_z is not None:
+        diagnostics.append(f"目标难度：用户目标距离现货约 {target_z:.2f} 倍隐含波动；数值越高，越偏向小概率事件。")
+    if target_range.get("lower") and target_range.get("upper"):
+        diagnostics.append(
+            f"用户区间：用户给出的主要波动区间是 ${target_range['lower']:,.0f} 到 ${target_range['upper']:,.0f}。系统会优先围绕这个区间设计收权利金结构。"
+        )
+    if max_gamma:
+        diagnostics.append(f"Gamma 位置：30D 内最大 Gamma 敞口在 ${max_gamma['strike']:,.0f} 附近，价格接近该区域时可能更容易反复。")
     return {
         "features": features,
         "direction_confidence": round(score, 2),
@@ -80,5 +115,6 @@ def build_market_view(market: dict[str, Any], intent: dict[str, Any]) -> dict[st
         "trade_flow_view": trade_bias,
         "expected_move_usd": expected_move,
         "target_z_score": target_z,
-        "reasons": reasons[:4],
+        "reasons": reasons[:6],
+        "diagnostics": diagnostics,
     }

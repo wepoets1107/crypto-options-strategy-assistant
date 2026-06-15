@@ -39,11 +39,20 @@ def choose_strategy_name(intent: dict[str, Any], market_view: dict[str, Any]) ->
     return "Iron Condor"
 
 
-def build_legs(strategy: str, options: list[dict[str, Any]], spot: float, expiry: str, target_price: float | None) -> list[dict[str, Any]]:
+def build_legs(
+    strategy: str,
+    options: list[dict[str, Any]],
+    spot: float,
+    expiry: str,
+    target_price: float | None,
+    target_range: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
     calls = option_rows(options, expiry, "call")
     puts = option_rows(options, expiry, "put")
     target_up = target_price if target_price and target_price > spot else spot * 1.08
     target_down = target_price if target_price and target_price < spot else spot * 0.92
+    range_low = float(target_range["lower"]) if target_range and target_range.get("lower") else None
+    range_high = float(target_range["upper"]) if target_range and target_range.get("upper") else None
 
     if strategy == "Long Call":
         return [leg(pick_by_delta(calls, 0.45, "buy"), "buy")]
@@ -92,8 +101,8 @@ def build_legs(strategy: str, options: list[dict[str, Any]], spot: float, expiry
         sell = pick_by_strike(puts, target_down, "sell", maximum=buy["strike"] - 1)
         return [leg(buy, "buy"), leg(sell, "sell", 2)]
 
-    put_sell = pick_by_delta(puts, -0.18, "sell")
-    call_sell = pick_by_delta(calls, 0.18, "sell")
+    put_sell = pick_by_strike(puts, range_low, "sell", maximum=spot - 1) if range_low and range_low < spot else pick_by_delta(puts, -0.18, "sell")
+    call_sell = pick_by_strike(calls, range_high, "sell", minimum=spot + 1) if range_high and range_high > spot else pick_by_delta(calls, 0.18, "sell")
     put_buy = pick_by_strike(puts, put_sell["strike"] * 0.94, "buy", maximum=put_sell["strike"] - 1)
     call_buy = pick_by_strike(calls, call_sell["strike"] * 1.06, "buy", minimum=call_sell["strike"] + 1)
     return [leg(put_sell, "sell"), leg(put_buy, "buy"), leg(call_sell, "sell"), leg(call_buy, "buy")]
@@ -106,35 +115,55 @@ def risk_notes(strategy: str) -> list[str]:
     return notes
 
 
+MIN_BTC_OPTION_QUANTITY = 0.1
+DEFAULT_BTC_OPTION_QUANTITY = 0.1
+
+
 def round_down_quantity(value: float) -> float:
-    if value >= 1:
-        return 1.0
-    if value >= 0.1:
-        return max(0.1, math.floor(value * 10) / 10)
-    return max(0.01, math.floor(value * 100) / 100)
+    if value < MIN_BTC_OPTION_QUANTITY:
+        return 0.0
+    return max(MIN_BTC_OPTION_QUANTITY, math.floor(value * 10) / 10)
 
 
 def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], capital_usd: float | None) -> dict[str, Any]:
     max_loss = abs(float(payoff.get("estimated_min_pnl_usd") or 0))
     if not capital_usd or capital_usd <= 0:
+        for item in legs:
+            item["quantity"] = DEFAULT_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
         return {
             "capital_usd": None,
             "base_max_loss_usd": max_loss,
-            "recommended_quantity": 1.0,
-            "adjusted": False,
-            "message": "用户没有提供资金规模，按 1 份策略展示。",
+            "recommended_quantity": DEFAULT_BTC_OPTION_QUANTITY,
+            "adjusted": True,
+            "insufficient": False,
+            "message": "用户没有提供资金规模；BTC 期权最小交易单位为 0.1，因此默认按 0.1 份策略展示。",
         }
 
     if max_loss <= 0 or max_loss <= capital_usd:
+        default_loss = max_loss * DEFAULT_BTC_OPTION_QUANTITY
+        for item in legs:
+            item["quantity"] = DEFAULT_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
         return {
             "capital_usd": capital_usd,
             "base_max_loss_usd": max_loss,
-            "recommended_quantity": 1.0,
-            "adjusted": False,
-            "message": f"按 1 份策略估算，最大亏损约 ${max_loss:,.0f}，没有超过你提供的 ${capital_usd:,.0f} 资金。",
+            "recommended_quantity": DEFAULT_BTC_OPTION_QUANTITY,
+            "adjusted": True,
+            "insufficient": False,
+            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；BTC 期权最小交易单位为 0.1，默认建议 0.1 份，对应最大亏损约 ${default_loss:,.0f}。",
         }
 
     quantity = round_down_quantity(capital_usd / max_loss)
+    if quantity <= 0:
+        for item in legs:
+            item["quantity"] = MIN_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
+        return {
+            "capital_usd": capital_usd,
+            "base_max_loss_usd": max_loss,
+            "recommended_quantity": MIN_BTC_OPTION_QUANTITY,
+            "adjusted": True,
+            "insufficient": True,
+            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；即使用最小 0.1 份，估算最大亏损也约 ${max_loss * MIN_BTC_OPTION_QUANTITY:,.0f}，高于你提供的 ${capital_usd:,.0f} 资金。",
+        }
     for item in legs:
         item["quantity"] = quantity * float(item.get("quantity") or 1)
     return {
@@ -142,7 +171,8 @@ def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], ca
         "base_max_loss_usd": max_loss,
         "recommended_quantity": quantity,
         "adjusted": True,
-        "message": f"按 1 份策略估算，最大亏损约 ${max_loss:,.0f}，超过你提供的 ${capital_usd:,.0f} 资金；因此建议把数量降到约 {quantity:g} 份。",
+        "insufficient": False,
+        "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}，超过你提供的 ${capital_usd:,.0f} 资金；因此建议把数量降到 {quantity:g} 份。",
     }
 
 
@@ -150,7 +180,7 @@ def select_strategy(market: dict[str, Any], intent: dict[str, Any], market_view:
     spot = float(market["spot"])
     expiry = closest_expiry(market["options"], int(intent["horizon_days"]))
     strategy = choose_strategy_name(intent, market_view)
-    legs = build_legs(strategy, market["options"], spot, expiry, intent.get("target_price"))
+    legs = build_legs(strategy, market["options"], spot, expiry, intent.get("target_price"), intent.get("target_range"))
     payoff = build_payoff(legs, spot, intent.get("target_price"))
     position_sizing = apply_position_sizing(legs, payoff, intent.get("capital_usd"))
     if position_sizing["adjusted"]:

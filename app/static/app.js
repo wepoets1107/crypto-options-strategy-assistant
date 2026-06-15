@@ -123,18 +123,23 @@ function renderIntent(intent) {
   const labels = {
     bullish: "看涨",
     bearish: "看跌",
-    range: "横盘",
+    range: "横盘/区间",
     volatile: "大波动",
     unknown: "未识别",
   };
+  const riskLabels = { beginner: "新手", advanced: "高级" };
+  const rangeText = intent.target_range?.lower && intent.target_range?.upper
+    ? `$${fmt(intent.target_range.lower, 0)} - $${fmt(intent.target_range.upper, 0)}`
+    : "--";
   $("intentBox").innerHTML = [
     ["标的", intent.asset],
     ["方向", labels[intent.direction] || intent.direction],
     ["时间范围", `${intent.horizon_days} 天`],
     ["目标价", intent.target_price ? `$${fmt(intent.target_price, 0)}` : "--"],
+    ["目标区间", rangeText],
     ["目标涨跌", intent.target_move_usd ? `$${fmt(intent.target_move_usd, 0)}` : "--"],
     ["资金规模", intent.capital_usd ? `$${fmt(intent.capital_usd, 0)}` : "--"],
-    ["风险偏好", intent.risk_profile],
+    ["风险偏好", riskLabels[intent.risk_profile] || intent.risk_profile],
   ]
     .map(([key, value]) => `<div><span>${key}</span><strong>${value}</strong></div>`)
     .join("");
@@ -147,7 +152,8 @@ function renderMarket(view) {
     `选择到期：${features.selected_expiry_label}，约 ${fmt(features.selected_expiry_days, 1)} 天`,
     `ATM IV：${features.atm_iv ? fmt(features.atm_iv, 1) + "%" : "--"}；25D Skew：${features.skew_25d ? fmt(features.skew_25d, 2) : "--"}`,
     `波动率判断：${view.volatility_view}；大额成交：${view.trade_flow_view}`,
-    ...view.reasons,
+    `<span class="brief-title">判断依据</span>`,
+    ...(view.diagnostics || view.reasons || []),
   ];
   $("marketBox").innerHTML = rows.map((row) => `<div>${row}</div>`).join("");
 }
