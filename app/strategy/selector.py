@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from app.market_data.deribit import closest_expiry
@@ -105,12 +106,55 @@ def risk_notes(strategy: str) -> list[str]:
     return notes
 
 
+def round_down_quantity(value: float) -> float:
+    if value >= 1:
+        return 1.0
+    if value >= 0.1:
+        return max(0.1, math.floor(value * 10) / 10)
+    return max(0.01, math.floor(value * 100) / 100)
+
+
+def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], capital_usd: float | None) -> dict[str, Any]:
+    max_loss = abs(float(payoff.get("estimated_min_pnl_usd") or 0))
+    if not capital_usd or capital_usd <= 0:
+        return {
+            "capital_usd": None,
+            "base_max_loss_usd": max_loss,
+            "recommended_quantity": 1.0,
+            "adjusted": False,
+            "message": "用户没有提供资金规模，按 1 份策略展示。",
+        }
+
+    if max_loss <= 0 or max_loss <= capital_usd:
+        return {
+            "capital_usd": capital_usd,
+            "base_max_loss_usd": max_loss,
+            "recommended_quantity": 1.0,
+            "adjusted": False,
+            "message": f"按 1 份策略估算，最大亏损约 ${max_loss:,.0f}，没有超过你提供的 ${capital_usd:,.0f} 资金。",
+        }
+
+    quantity = round_down_quantity(capital_usd / max_loss)
+    for item in legs:
+        item["quantity"] = quantity * float(item.get("quantity") or 1)
+    return {
+        "capital_usd": capital_usd,
+        "base_max_loss_usd": max_loss,
+        "recommended_quantity": quantity,
+        "adjusted": True,
+        "message": f"按 1 份策略估算，最大亏损约 ${max_loss:,.0f}，超过你提供的 ${capital_usd:,.0f} 资金；因此建议把数量降到约 {quantity:g} 份。",
+    }
+
+
 def select_strategy(market: dict[str, Any], intent: dict[str, Any], market_view: dict[str, Any]) -> dict[str, Any]:
     spot = float(market["spot"])
     expiry = closest_expiry(market["options"], int(intent["horizon_days"]))
     strategy = choose_strategy_name(intent, market_view)
     legs = build_legs(strategy, market["options"], spot, expiry, intent.get("target_price"))
     payoff = build_payoff(legs, spot, intent.get("target_price"))
+    position_sizing = apply_position_sizing(legs, payoff, intent.get("capital_usd"))
+    if position_sizing["adjusted"]:
+        payoff = build_payoff(legs, spot, intent.get("target_price"))
     premium = premium_summary(legs, spot)
     return {
         "strategy_name": strategy,
@@ -122,5 +166,6 @@ def select_strategy(market: dict[str, Any], intent: dict[str, Any], market_view:
         "legs": legs,
         "premium": premium,
         "payoff": payoff,
+        "position_sizing": position_sizing,
         "risk_notes": risk_notes(strategy),
     }

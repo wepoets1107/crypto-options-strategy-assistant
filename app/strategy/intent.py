@@ -25,11 +25,25 @@ def _target_move_from_text(text: str) -> float | None:
     return None
 
 
+def _capital_from_text(text: str) -> float | None:
+    text = text.replace(",", "")
+    patterns = [
+        r"(?:我有|本金|资金|预算|仓位|账户)\s*(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+        r"(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt)\b",
+        r"(\d+(?:\.\d+)?)\s*(?:美元|美金|刀)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return float(match.group(1))
+    return None
+
+
 def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> dict[str, Any]:
     lower = text.lower()
     direction = (quick or {}).get("direction") or "unknown"
     if direction == "unknown":
-        if any(word in text for word in ["看涨", "上涨", "涨", "突破", "牛市"]):
+        if any(word in text for word in ["看涨", "上涨", "涨", "暴涨", "突破", "牛市"]):
             direction = "bullish"
         elif any(word in text for word in ["看跌", "下跌", "跌", "回落", "熊市"]):
             direction = "bearish"
@@ -64,6 +78,7 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> 
         "horizon_days": horizon_days,
         "target_move_usd": target_move,
         "target_price": target_price,
+        "capital_usd": _capital_from_text(text),
         "risk_profile": "advanced" if advanced else "beginner",
         "income_preference": income_preference,
         "notes": text or "快捷观点",
@@ -83,6 +98,7 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float)
         "horizon_days": max(1, min(horizon_days, 180)),
         "target_move_usd": float(target_move) if target_move is not None else fallback.get("target_move_usd"),
         "target_price": float(target_price) if target_price is not None else fallback.get("target_price"),
+        "capital_usd": float(raw.get("capital_usd")) if raw.get("capital_usd") is not None else fallback.get("capital_usd"),
         "risk_profile": raw.get("risk_profile") or fallback.get("risk_profile", "beginner"),
         "income_preference": bool(raw.get("income_preference", fallback.get("income_preference", False))),
         "notes": raw.get("notes") or fallback.get("notes", ""),

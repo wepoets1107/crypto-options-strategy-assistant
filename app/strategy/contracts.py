@@ -40,7 +40,7 @@ def pick_by_delta(rows: list[dict[str, Any]], target_delta: float, side: str) ->
     return min(rows, key=lambda row: (abs(row["delta"] - target_delta), -liquidity_score(row, side)))
 
 
-def leg(row: dict[str, Any], side: str, quantity: int = 1) -> dict[str, Any]:
+def leg(row: dict[str, Any], side: str, quantity: float = 1) -> dict[str, Any]:
     preferred = row.get("ask") if side == "buy" else row.get("bid")
     price_source = "ask" if side == "buy" else "bid"
     if not preferred or preferred <= 0:

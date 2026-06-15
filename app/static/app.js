@@ -3,7 +3,6 @@ const $ = (id) => document.getElementById(id);
 let currentDirection = "bullish";
 let currentDays = 30;
 let lastPayload = null;
-let autoTimer = null;
 
 function fmt(value, digits = 0) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
@@ -120,6 +119,7 @@ function renderIntent(intent) {
     ["时间范围", `${intent.horizon_days} 天`],
     ["目标价", intent.target_price ? `$${fmt(intent.target_price, 0)}` : "--"],
     ["目标涨跌", intent.target_move_usd ? `$${fmt(intent.target_move_usd, 0)}` : "--"],
+    ["资金规模", intent.capital_usd ? `$${fmt(intent.capital_usd, 0)}` : "--"],
     ["风险偏好", intent.risk_profile],
   ]
     .map(([key, value]) => `<div><span>${key}</span><strong>${value}</strong></div>`)
@@ -162,6 +162,7 @@ function renderStrategy(strategy) {
     ["估算最大亏损", money(payoff.estimated_min_pnl_usd)],
     ["估算最大收益", money(payoff.estimated_max_pnl_usd)],
     ["目标价收益", payoff.target_pnl_usd === null ? "--" : money(payoff.target_pnl_usd)],
+    ["资金判断", strategy.position_sizing?.message || "--"],
   ]
     .map(([key, value]) => `<article><span>${key}</span><strong>${value}</strong></article>`)
     .join("");
@@ -216,20 +217,6 @@ function renderPayoff(payoff) {
   </svg>`;
 }
 
-function setupAutoRefresh() {
-  $("autoRefresh").addEventListener("change", () => {
-    if ($("autoRefresh").checked) {
-      setLog("已开启 5 分钟自动更新。");
-      autoTimer = window.setInterval(rerunLast, 5 * 60 * 1000);
-    } else {
-      setLog("已关闭自动更新。");
-      window.clearInterval(autoTimer);
-      autoTimer = null;
-    }
-  });
-}
-
 setupSegments();
-setupAutoRefresh();
 $("quickBtn").addEventListener("click", () => generate(true));
 $("generateBtn").addEventListener("click", () => generate(false));

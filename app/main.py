@@ -48,13 +48,22 @@ def fallback_explanation(intent: dict[str, Any], market_view: dict[str, Any], st
     be = payoff.get("markers", {}).get("breakevens", [])
     be_text = "、".join(f"${price:,.0f}" for price in be) if be else "暂无明确盈亏平衡点"
     target_text = f"如果到期价格接近你的目标价，估算盈亏约为 ${target_pnl:,.0f}。" if target_pnl is not None else "你没有给出明确目标价，所以这里主要看区间和盈亏平衡点。"
+    sizing = strategy.get("position_sizing") or {}
+    sizing_text = sizing.get("message", "")
 
-    return (
+    paragraphs = [
         f"简单说：{alignment}，所以我没有给你一个特别激进的方案，而是选择了 {name}。\n\n"
-        f"为什么这么选：{reason}。对新手来说，先把“最多可能亏多少、价格走到哪里开始赚钱”看清楚，比单纯猜方向更重要。\n\n"
+        f"为什么这么选：{reason}。对新手来说，先把“最多可能亏多少、价格走到哪里开始赚钱”看清楚，比单纯猜方向更重要。",
+    ]
+    if sizing_text:
+        paragraphs.append(f"仓位上：{sizing_text}")
+    paragraphs.extend(
+        [
         f"这组策略现在大致是{net_type}。按当前 Deribit bid/ask/mark 估算，图上的区间里最大亏损约为 {usd(abs(max_loss) if max_loss is not None else None)}，最大收益约为 {usd(max_profit)}，盈亏平衡点大约在 {be_text}。{target_text}\n\n"
         "需要注意：这只是基于当前公开行情的教育型估算，不是投资建议；策略本身仍然可能亏钱。"
+        ]
     )
+    return "\n\n".join(paragraphs)
 
 
 async def explain(settings, intent: dict[str, Any], market_view: dict[str, Any], strategy: dict[str, Any]) -> str:

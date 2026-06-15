@@ -7,6 +7,7 @@ direction: bullish | bearish | range | volatile | unknown
 horizon_days: integer, default 30
 target_move_usd: number or null
 target_price: number or null
+capital_usd: user's stated available capital in USD/USDT, number or null
 risk_profile: beginner | moderate | advanced
 income_preference: true if user wants to collect premium or sell options
 notes: short Chinese summary

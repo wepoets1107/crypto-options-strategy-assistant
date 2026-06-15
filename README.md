@@ -15,7 +15,6 @@ A local-first BTC options strategy assistant. Users can express a view through q
 - 时间范围：未来一周、未来一个月、未来三个月
 - 复杂输入框：支持用户输入更细的观点和目标价
 - 手动生成策略
-- 可选 5 分钟自动更新
 - 用户自带 OpenAI-compatible LLM
 - 无 LLM 时自动使用规则解析
 - Deribit 真实期权合约选择
@@ -30,7 +29,6 @@ English:
 - Horizon: one week, one month, three months
 - Free-form input for complex views and target prices
 - Manual strategy generation
-- Optional 5-minute auto refresh
 - User-provided OpenAI-compatible LLM
 - Rule-based fallback when no LLM is configured
 - Concrete Deribit contract selection
