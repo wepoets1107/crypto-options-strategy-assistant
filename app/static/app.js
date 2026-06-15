@@ -61,7 +61,7 @@ async function generate(useQuick = false, silent = false) {
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
     render(data);
-    setLog(`${silent ? "自动更新完成" : "策略已生成"}：${data.strategy.strategy_name}`);
+    setLog(`${silent ? "默认策略已生成" : "策略已生成"}：${data.strategy.strategy_name}`);
   } catch (error) {
     setLog(`生成失败：${error.message}`);
   } finally {
@@ -91,6 +91,20 @@ async function rerunLast() {
   } finally {
     $("generateBtn").disabled = false;
     $("quickBtn").disabled = false;
+  }
+}
+
+async function refreshSpot() {
+  try {
+    const response = await fetch("/api/spot");
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    $("spot").textContent = `BTC $${fmt(data.spot, 0)}`;
+    if (!$("updatedAt").textContent || $("updatedAt").textContent === "尚未生成") {
+      $("updatedAt").textContent = new Date(data.updated_at).toLocaleString();
+    }
+  } catch (error) {
+    $("spot").textContent = "BTC --";
   }
 }
 
@@ -220,3 +234,7 @@ function renderPayoff(payoff) {
 setupSegments();
 $("quickBtn").addEventListener("click", () => generate(true));
 $("generateBtn").addEventListener("click", () => generate(false));
+
+refreshSpot();
+generate(true, true);
+window.setInterval(refreshSpot, 60 * 1000);

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.config import STATIC_DIR, get_settings
 from app.llm.client import chat_text
 from app.llm.prompts import EXPLANATION_SYSTEM_PROMPT
-from app.market_data.deribit import fetch_btc_market
+from app.market_data.deribit import fetch_btc_market, fetch_btc_spot
 from app.strategy.intent import parse_intent
 from app.strategy.market_view import build_market_view
 from app.strategy.selector import select_strategy
@@ -91,6 +91,11 @@ async def index_page() -> FileResponse:
 @app.get("/api/health")
 async def health() -> JSONResponse:
     return JSONResponse({"ok": True, "service": "Crypto Options Strategy Assistant"})
+
+
+@app.get("/api/spot")
+async def spot() -> JSONResponse:
+    return JSONResponse(await fetch_btc_spot())
 
 
 @app.post("/api/generate")

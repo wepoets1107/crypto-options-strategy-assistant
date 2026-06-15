@@ -56,6 +56,16 @@ async def deribit_public(client: httpx.AsyncClient, method: str, params: dict[st
     return payload.get("result")
 
 
+async def fetch_btc_spot() -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=12) as client:
+        result = await deribit_public(client, "get_index_price", {"index_name": SUPPORTED_CURRENCIES["BTC"]})
+    return {
+        "currency": "BTC",
+        "spot": safe_float(result.get("index_price")),
+        "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+
+
 def expiry_label(expiry_iso: str) -> str:
     expiry = datetime.fromisoformat(expiry_iso)
     return expiry.strftime("%d%b%y").upper()
