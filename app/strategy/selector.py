@@ -100,11 +100,8 @@ def build_legs(strategy: str, options: list[dict[str, Any]], spot: float, expiry
 
 def risk_notes(strategy: str) -> list[str]:
     notes = ["本工具用于研究和教育，不构成投资建议。"]
-    if strategy in {"Bull Put Spread", "Bear Call Spread", "Iron Condor", "Iron Butterfly"}:
-        notes.append("该策略包含卖出期权腿，真实交易会涉及保证金、滑点和提前风控。")
     if strategy in {"Short Strangle", "Short Straddle", "Call Ratio Spread", "Put Ratio Spread"}:
         notes.append("该策略含高级卖方或比例风险，不适合不了解尾部风险的新手直接交易。")
-    notes.append("合约价格使用 Deribit 当前 bid/ask/mark 估算，实际成交价格可能不同。")
     return notes
 
 
