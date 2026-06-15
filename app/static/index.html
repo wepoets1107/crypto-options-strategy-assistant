@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>加密期权策略宝</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>加密期权策略宝</h1>
+          <p>Crypto Options Strategy Assistant · BTC-only MVP</p>
+        </div>
+        <div class="status">
+          <span id="spot">BTC --</span>
+          <span id="updatedAt">尚未生成</span>
+        </div>
+      </header>
+
+      <section class="control-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>快捷观点</h2>
+            <span>适合小白用户</span>
+          </div>
+          <div class="segmented" id="directionGroup">
+            <button class="segment active" type="button" data-direction="bullish">看涨</button>
+            <button class="segment" type="button" data-direction="bearish">看跌</button>
+            <button class="segment" type="button" data-direction="range">看横盘</button>
+          </div>
+          <div class="segmented" id="horizonGroup">
+            <button class="segment" type="button" data-days="7">未来一周</button>
+            <button class="segment active" type="button" data-days="30">未来一个月</button>
+            <button class="segment" type="button" data-days="90">未来三个月</button>
+          </div>
+          <button id="quickBtn" class="primary" type="button">生成快捷策略</button>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>复杂需求</h2>
+            <span>例如：我认为接下来一个月，比特币可能上涨1万美元</span>
+          </div>
+          <textarea id="promptInput" rows="6" placeholder="输入你的观点、目标价、时间范围、风险偏好或是否想收权利金。"></textarea>
+          <div class="action-row">
+            <button id="generateBtn" class="primary" type="button">生成策略</button>
+            <label class="toggle">
+              <input id="autoRefresh" type="checkbox" />
+              <span>5分钟自动更新</span>
+            </label>
+          </div>
+        </article>
+      </section>
+
+      <section class="result-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>观点识别</h2>
+            <span id="llmBadge">规则解析</span>
+          </div>
+          <div id="intentBox" class="kv"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>市场研判</h2>
+            <span id="confidence">--</span>
+          </div>
+          <div id="marketBox" class="brief"></div>
+        </article>
+      </section>
+
+      <section class="panel strategy-panel">
+        <div class="panel-head">
+          <h2 id="strategyName">推荐策略</h2>
+          <span id="strategyMeta">等待生成</span>
+        </div>
+        <div id="legsTable" class="legs-table"></div>
+        <div id="metrics" class="metrics"></div>
+      </section>
+
+      <section class="payoff-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Payoff 图</h2>
+            <span>到期盈亏估算，单位 USD</span>
+          </div>
+          <div id="payoffChart" class="payoff-chart"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>AI解释与风险</h2>
+            <span>教育用途</span>
+          </div>
+          <div id="explanation" class="explanation">输入观点后生成策略。</div>
+          <ul id="riskList" class="risk-list"></ul>
+        </article>
+      </section>
+
+      <section class="support-panel" aria-label="打赏支持">
+        <h2>打赏支持冰火岛社区</h2>
+        <p>EVM Wallet：<span>0x29f091DAA3dfee8100645ee24239bCC3ae174B42</span></p>
+      </section>
+
+      <footer class="console">
+        <span>状态</span>
+        <div id="log">页面已加载。</div>
+      </footer>
+    </main>
+
+    <script src="/static/app.js?v=1"></script>
+  </body>
+</html>
