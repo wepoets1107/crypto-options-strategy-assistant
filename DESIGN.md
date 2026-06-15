@@ -101,7 +101,7 @@ Example rules:
 
 ## 合约选择 / Contract Picking
 
-- 到期日选择最接近用户时间范围且未到期的 expiry
+- 到期日优先选择不早于用户时间范围的最近 expiry，确保策略覆盖用户观点周期
 - ATM 腿选择接近 spot 的真实合约
 - 目标腿选择接近 target price 的真实合约
 - Delta 腿选择接近目标 delta 的真实合约
@@ -111,7 +111,7 @@ Example rules:
 
 English:
 
-- Pick the live expiry closest to the user's horizon
+- Prefer the nearest live expiry that is not earlier than the user's horizon, so the strategy covers the user's view window
 - ATM legs use real contracts closest to spot
 - Target legs use real contracts closest to target price
 - Delta legs use real contracts closest to target delta

@@ -135,9 +135,15 @@ def closest_expiry(options: list[dict[str, Any]], horizon_days: int) -> str:
     for expiry, rows in grouped.items():
         days = min(row["days"] for row in rows)
         oi = sum(row["open_interest"] for row in rows)
-        candidates.append((abs(days - horizon_days), -oi, expiry))
-    candidates.sort()
-    return candidates[0][2]
+        candidates.append({"days": days, "open_interest": oi, "expiry": expiry})
+
+    covering = [row for row in candidates if row["days"] >= horizon_days]
+    if covering:
+        covering.sort(key=lambda row: (row["days"] - horizon_days, -row["open_interest"]))
+        return covering[0]["expiry"]
+
+    candidates.sort(key=lambda row: (abs(row["days"] - horizon_days), -row["open_interest"]))
+    return candidates[0]["expiry"]
 
 
 def atm_iv(options: list[dict[str, Any]], spot: float, expiry: str) -> float | None:
