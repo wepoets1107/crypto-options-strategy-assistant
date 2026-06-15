@@ -139,7 +139,7 @@ function renderMarket(view) {
 }
 
 function renderStrategy(strategy) {
-  $("strategyName").textContent = strategy.strategy_name;
+  $("strategyName").textContent = `策略建议：${strategy.strategy_name}`;
   $("strategyMeta").textContent = `${strategy.asset} · ${strategy.expiry_label}`;
   $("legsTable").innerHTML = [
     `<div class="leg-row header"><span>方向</span><span>合约</span><span>数量</span><span>行权价</span><span>价格</span><span>IV</span><span>Delta</span></div>`,
