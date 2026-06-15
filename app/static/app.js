@@ -176,7 +176,7 @@ function renderPayoff(payoff) {
   }
   const width = 760;
   const height = 330;
-  const pad = { left: 58, right: 22, top: 18, bottom: 38 };
+  const pad = { left: 68, right: 24, top: 22, bottom: 58 };
   const minX = Math.min(...points.map((p) => p.price));
   const maxX = Math.max(...points.map((p) => p.price));
   const minY = Math.min(...points.map((p) => p.pnl), 0);
@@ -187,8 +187,14 @@ function renderPayoff(payoff) {
   const zeroY = y(0);
   const spotX = x(payoff.markers.spot);
   const targetX = payoff.markers.target ? x(payoff.markers.target) : null;
-  const breakevens = (payoff.markers.breakevens || [])
-    .map((price) => `<circle cx="${x(price)}" cy="${zeroY}" r="4" fill="#17202a"><title>Breakeven ${fmt(price, 0)}</title></circle>`)
+  const bePrices = payoff.markers.breakevens || [];
+  const breakevens = bePrices
+    .map((price, index) => {
+      const labelY = height - (index % 2 === 0 ? 28 : 12);
+      return `<line class="marker-breakeven" x1="${x(price)}" y1="${pad.top}" x2="${x(price)}" y2="${height - pad.bottom}" />
+        <circle cx="${x(price)}" cy="${zeroY}" r="4" fill="#17202a"><title>Breakeven ${fmt(price, 0)}</title></circle>
+        <text class="chart-text strong" x="${x(price) + 5}" y="${labelY}">BE $${fmt(price, 0)}</text>`;
+    })
     .join("");
   $("payoffChart").innerHTML = `<svg class="payoff-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Payoff chart">
     <line class="grid-line" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}" />
@@ -200,9 +206,12 @@ function renderPayoff(payoff) {
     ${breakevens}
     <text class="chart-text" x="${pad.left}" y="${height - 12}">$${fmt(minX, 0)}</text>
     <text class="chart-text" x="${width - pad.right - 68}" y="${height - 12}">$${fmt(maxX, 0)}</text>
-    <text class="chart-text" x="${spotX + 4}" y="30">Spot</text>
-    ${targetX ? `<text class="chart-text" x="${targetX + 4}" y="48">Target</text>` : ""}
+    <text class="chart-text strong" x="${spotX + 4}" y="30">Spot $${fmt(payoff.markers.spot, 0)}</text>
+    <text class="chart-text strong" x="${spotX + 4}" y="${height - 42}">Spot</text>
+    ${targetX ? `<text class="chart-text strong" x="${targetX + 4}" y="48">Target $${fmt(payoff.markers.target, 0)}</text>
+    <text class="chart-text strong" x="${targetX + 4}" y="${height - 42}">Target</text>` : ""}
     <text class="chart-text" x="8" y="${y(maxY) + 4}">${money(maxY)}</text>
+    <text class="chart-text strong" x="8" y="${zeroY - 6}">$0</text>
     <text class="chart-text" x="8" y="${y(minY) + 4}">${money(minY)}</text>
   </svg>`;
 }

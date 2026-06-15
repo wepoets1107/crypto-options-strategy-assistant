@@ -297,9 +297,21 @@ textarea:focus {
   stroke-dasharray: 6 6;
 }
 
+.marker-breakeven {
+  stroke: #17202a;
+  stroke-width: 1.4;
+  stroke-dasharray: 4 5;
+  opacity: 0.78;
+}
+
 .chart-text {
   fill: var(--muted);
   font-size: 12px;
+}
+
+.chart-text.strong {
+  fill: var(--ink);
+  font-weight: 700;
 }
 
 .explanation {
