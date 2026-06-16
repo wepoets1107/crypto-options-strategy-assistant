@@ -11,7 +11,14 @@ import httpx
 
 
 DERIBIT_API = "https://www.deribit.com/api/v2"
-SUPPORTED_CURRENCIES = {"BTC": "btc_usd"}
+SUPPORTED_CURRENCIES = {"BTC": "btc_usd", "ETH": "eth_usd"}
+
+
+def normalize_currency(currency: str | None) -> str:
+    value = (currency or "BTC").upper()
+    if value not in SUPPORTED_CURRENCIES:
+        raise ValueError(f"Unsupported currency: {currency}")
+    return value
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -56,14 +63,19 @@ async def deribit_public(client: httpx.AsyncClient, method: str, params: dict[st
     return payload.get("result")
 
 
-async def fetch_btc_spot() -> dict[str, Any]:
+async def fetch_spot(currency: str = "BTC") -> dict[str, Any]:
+    currency = normalize_currency(currency)
     async with httpx.AsyncClient(timeout=12) as client:
-        result = await deribit_public(client, "get_index_price", {"index_name": SUPPORTED_CURRENCIES["BTC"]})
+        result = await deribit_public(client, "get_index_price", {"index_name": SUPPORTED_CURRENCIES[currency]})
     return {
-        "currency": "BTC",
+        "currency": currency,
         "spot": safe_float(result.get("index_price")),
         "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+
+
+async def fetch_btc_spot() -> dict[str, Any]:
+    return await fetch_spot("BTC")
 
 
 def expiry_label(expiry_iso: str) -> str:
@@ -88,7 +100,7 @@ def instrument_meta(instruments: list[dict[str, Any]]) -> dict[str, dict[str, An
     return meta
 
 
-def enrich_options(summaries: list[dict[str, Any]], meta: dict[str, dict[str, Any]], spot: float) -> list[dict[str, Any]]:
+def enrich_options(summaries: list[dict[str, Any]], meta: dict[str, dict[str, Any]], spot: float, currency: str) -> list[dict[str, Any]]:
     now = datetime.now(UTC)
     rows = []
     for item in summaries:
@@ -112,6 +124,7 @@ def enrich_options(summaries: list[dict[str, Any]], meta: dict[str, dict[str, An
         rows.append(
             {
                 "instrument_name": name,
+                "currency": currency,
                 "strike": strike,
                 "expiry": expiry.isoformat(timespec="seconds"),
                 "expiry_label": expiry.strftime("%d%b%y").upper(),
@@ -140,7 +153,7 @@ def by_expiry(options: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
 def closest_expiry(options: list[dict[str, Any]], horizon_days: int) -> str:
     grouped = by_expiry(options)
     if not grouped:
-        raise RuntimeError("No live BTC options were returned by Deribit.")
+        raise RuntimeError("No live options were returned by Deribit.")
     candidates = []
     for expiry, rows in grouped.items():
         days = min(row["days"] for row in rows)
@@ -247,12 +260,13 @@ def trade_bias(trades: list[dict[str, Any]]) -> dict[str, Any]:
     return {"bias": bias, "large_call_amount": calls, "large_put_amount": puts, "large_trades": large[:12]}
 
 
-async def fetch_btc_market() -> dict[str, Any]:
+async def fetch_market(currency: str = "BTC") -> dict[str, Any]:
+    currency = normalize_currency(currency)
     async with httpx.AsyncClient(timeout=20) as client:
-        index_task = deribit_public(client, "get_index_price", {"index_name": SUPPORTED_CURRENCIES["BTC"]})
-        instruments_task = deribit_public(client, "get_instruments", {"currency": "BTC", "kind": "option", "expired": "false"})
-        summaries_task = deribit_public(client, "get_book_summary_by_currency", {"currency": "BTC", "kind": "option"})
-        trades_task = fetch_recent_trades(client, "BTC")
+        index_task = deribit_public(client, "get_index_price", {"index_name": SUPPORTED_CURRENCIES[currency]})
+        instruments_task = deribit_public(client, "get_instruments", {"currency": currency, "kind": "option", "expired": "false"})
+        summaries_task = deribit_public(client, "get_book_summary_by_currency", {"currency": currency, "kind": "option"})
+        trades_task = fetch_recent_trades(client, currency)
         index, instruments, summaries, trades = await asyncio.gather(
             index_task,
             instruments_task,
@@ -260,11 +274,15 @@ async def fetch_btc_market() -> dict[str, Any]:
             trades_task,
         )
     spot = safe_float(index.get("index_price"))
-    options = enrich_options(summaries, instrument_meta(instruments), spot)
+    options = enrich_options(summaries, instrument_meta(instruments), spot, currency)
     return {
-        "currency": "BTC",
+        "currency": currency,
         "spot": spot,
         "options": options,
         "trade_bias": trade_bias(trades.get("trades", []) if isinstance(trades, dict) else []),
         "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+
+
+async def fetch_btc_market() -> dict[str, Any]:
+    return await fetch_market("BTC")

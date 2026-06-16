@@ -1,2 +1,2 @@
 @echo off
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8010') do taskkill /PID %%a /F
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$pids = Get-NetTCPConnection -LocalPort 8010 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 } | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($processId in $pids) { Stop-Process -Id $processId -Force; Write-Host \"Stopped process $processId\" }"

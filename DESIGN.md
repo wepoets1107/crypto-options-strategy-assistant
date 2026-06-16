@@ -65,7 +65,7 @@ English:
 
 市场研判会综合：
 
-- BTC spot
+- Selected asset spot
 - selected expiry
 - ATM IV
 - 25D skew
@@ -76,7 +76,7 @@ English:
 
 It combines:
 
-- BTC spot
+- Selected asset spot
 - selected expiry
 - ATM IV
 - 25D skew
@@ -121,6 +121,6 @@ English:
 
 ## Payoff
 
-Payoff 使用到期盈亏估算，单位 USD。Deribit BTC 期权价格以 BTC 计价，前端展示时用当前 spot 转换为 USD 估算。
+Payoff 使用到期盈亏估算，单位 USD。Deribit 期权价格以标的币计价，前端展示时用当前 spot 转换为 USD 估算。
 
-Payoff is estimated at expiry in USD. Deribit BTC option prices are BTC-denominated; the UI converts premiums to USD using current spot for readability.
+Payoff is estimated at expiry in USD. Deribit option prices are denominated in the underlying coin; the UI converts premiums to USD using current spot for readability.

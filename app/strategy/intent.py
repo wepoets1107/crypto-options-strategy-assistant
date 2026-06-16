@@ -72,7 +72,7 @@ def _target_range_from_text(text: str) -> dict[str, float] | None:
     return None
 
 
-def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> dict[str, Any]:
+def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float, asset: str = "BTC") -> dict[str, Any]:
     lower = text.lower()
     target_range = _target_range_from_text(text)
     direction = (quick or {}).get("direction") or "unknown"
@@ -107,7 +107,7 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> 
         word in text for word in ["高级", "比例价差", "裸卖", "双卖"]
     )
     return {
-        "asset": "BTC",
+        "asset": asset,
         "direction": direction,
         "horizon_days": horizon_days,
         "target_move_usd": target_move,
@@ -120,7 +120,7 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float) -> 
     }
 
 
-def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float) -> dict[str, Any]:
+def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float, asset: str = "BTC") -> dict[str, Any]:
     direction = raw.get("direction") if raw.get("direction") in {"bullish", "bearish", "range", "volatile"} else fallback["direction"]
     horizon_days = int(raw.get("horizon_days") or fallback["horizon_days"] or 30)
     target_move = raw.get("target_move_usd")
@@ -129,7 +129,7 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float)
     if target_price is None and target_move is not None:
         target_price = spot + float(target_move) if direction == "bullish" else spot - float(target_move)
     return {
-        "asset": "BTC",
+        "asset": asset,
         "direction": direction,
         "horizon_days": max(1, min(horizon_days, 180)),
         "target_move_usd": float(target_move) if target_move is not None else fallback.get("target_move_usd"),
@@ -142,8 +142,8 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float)
     }
 
 
-async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, settings: Settings) -> dict[str, Any]:
-    fallback = parse_intent_rules(text, quick, spot)
+async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, settings: Settings, asset: str = "BTC") -> dict[str, Any]:
+    fallback = parse_intent_rules(text, quick, spot, asset)
     if not settings.llm_enabled or not text.strip():
         return fallback
     try:
@@ -152,4 +152,4 @@ async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, set
         raw = None
     if not raw:
         return fallback
-    return normalize_intent(raw, fallback, spot)
+    return normalize_intent(raw, fallback, spot, asset)

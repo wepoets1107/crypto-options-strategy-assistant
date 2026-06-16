@@ -11,7 +11,7 @@ def intrinsic(price: float, strike: float, option_type: str) -> float:
 
 def leg_pnl_usd(leg: dict[str, Any], expiry_price: float, spot: float) -> float:
     qty = float(leg.get("quantity") or 1)
-    premium = float(leg.get("price_btc") or 0) * spot * qty
+    premium = float(leg.get("price_coin") or leg.get("price_btc") or 0) * spot * qty
     value = intrinsic(expiry_price, float(leg["strike"]), leg["option_type"]) * qty
     if leg["side"] == "buy":
         return value - premium
@@ -56,10 +56,13 @@ def build_payoff(legs: list[dict[str, Any]], spot: float, target_price: float | 
 def premium_summary(legs: list[dict[str, Any]], spot: float) -> dict[str, Any]:
     net = 0.0
     for item in legs:
-        value = float(item.get("price_btc") or 0) * spot * float(item.get("quantity") or 1)
+        value = float(item.get("price_coin") or item.get("price_btc") or 0) * spot * float(item.get("quantity") or 1)
         net += -value if item["side"] == "buy" else value
+    currency = legs[0].get("currency", "BTC") if legs else "BTC"
     return {
         "net_premium_usd": net,
         "net_premium_type": "credit" if net > 0 else "debit" if net < 0 else "flat",
+        "net_premium_coin_est": net / spot if spot else 0,
         "net_premium_btc_est": net / spot if spot else 0,
+        "premium_currency": currency,
     }

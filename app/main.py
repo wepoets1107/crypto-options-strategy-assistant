@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.config import STATIC_DIR, get_settings
 from app.llm.client import chat_text
 from app.llm.prompts import EXPLANATION_SYSTEM_PROMPT
-from app.market_data.deribit import fetch_btc_market, fetch_btc_spot
+from app.market_data.deribit import fetch_market, fetch_spot, normalize_currency
 from app.strategy.intent import parse_intent
 from app.strategy.market_view import build_market_view
 from app.strategy.selector import select_strategy
@@ -23,6 +23,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 class GenerateRequest(BaseModel):
     text: str = ""
     quick: dict[str, Any] | None = None
+    asset: str = "BTC"
 
 
 def fallback_explanation(intent: dict[str, Any], market_view: dict[str, Any], strategy: dict[str, Any]) -> str:
@@ -59,8 +60,7 @@ def fallback_explanation(intent: dict[str, Any], market_view: dict[str, Any], st
         paragraphs.append(f"仓位上：{sizing_text}")
     paragraphs.extend(
         [
-        f"这组策略现在大致是{net_type}。按当前 Deribit bid/ask/mark 估算，图上的区间里最大亏损约为 {usd(abs(max_loss) if max_loss is not None else None)}，最大收益约为 {usd(max_profit)}，盈亏平衡点大约在 {be_text}。{target_text}\n\n"
-        "需要注意：这只是基于当前公开行情的教育型估算，不是投资建议；策略本身仍然可能亏钱。"
+        f"这组策略现在大致是{net_type}。按当前 Deribit bid/ask/mark 估算，图上的区间里最大亏损约为 {usd(abs(max_loss) if max_loss is not None else None)}，最大收益约为 {usd(max_profit)}，盈亏平衡点大约在 {be_text}。{target_text}"
         ]
     )
     return "\n\n".join(paragraphs)
@@ -94,15 +94,16 @@ async def health() -> JSONResponse:
 
 
 @app.get("/api/spot")
-async def spot() -> JSONResponse:
-    return JSONResponse(await fetch_btc_spot())
+async def spot(currency: str = "BTC") -> JSONResponse:
+    return JSONResponse(await fetch_spot(normalize_currency(currency)))
 
 
 @app.post("/api/generate")
 async def generate_strategy(request: GenerateRequest) -> JSONResponse:
     settings = get_settings()
-    market = await fetch_btc_market()
-    intent = await parse_intent(request.text, request.quick, float(market["spot"]), settings)
+    asset = normalize_currency(request.asset)
+    market = await fetch_market(asset)
+    intent = await parse_intent(request.text, request.quick, float(market["spot"]), settings, asset)
     market_view = build_market_view(market, intent)
     strategy = select_strategy(market, intent, market_view)
     explanation = await explain(settings, intent, market_view, strategy)
@@ -113,7 +114,7 @@ async def generate_strategy(request: GenerateRequest) -> JSONResponse:
             "strategy": strategy,
             "explanation": explanation,
             "market_meta": {
-                "currency": "BTC",
+                "currency": asset,
                 "spot": market["spot"],
                 "option_count": len(market["options"]),
                 "updated_at": market["updated_at"],

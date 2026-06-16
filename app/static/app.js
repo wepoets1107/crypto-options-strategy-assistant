@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 let currentDirection = "bullish";
 let currentDays = 30;
+let currentAsset = "BTC";
 let lastPayload = null;
 
 function fmt(value, digits = 0) {
@@ -24,6 +25,15 @@ function activeButton(group, attr) {
 }
 
 function setupSegments() {
+  $("assetGroup").addEventListener("click", async (event) => {
+    if (!(event.target instanceof HTMLButtonElement)) return;
+    $("assetGroup").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button === event.target));
+    currentAsset = event.target.dataset.asset;
+    lastPayload = null;
+    setLog(`已切换到 ${currentAsset}，正在生成默认策略...`);
+    await refreshSpot();
+    await generate(true, true);
+  });
   $("directionGroup").addEventListener("click", (event) => {
     if (!(event.target instanceof HTMLButtonElement)) return;
     $("directionGroup").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button === event.target));
@@ -39,7 +49,8 @@ function setupSegments() {
 function quickText() {
   const directionMap = { bullish: "看涨", bearish: "看跌", range: "看横盘" };
   const horizonMap = { 7: "未来一周", 30: "未来一个月", 90: "未来三个月" };
-  return `我${directionMap[currentDirection]}比特币，时间范围是${horizonMap[currentDays] || "未来一个月"}。`;
+  const assetName = currentAsset === "ETH" ? "以太坊" : "比特币";
+  return `我${directionMap[currentDirection]}${assetName}，时间范围是${horizonMap[currentDays] || "未来一个月"}。`;
 }
 
 async function generate(useQuick = false, silent = false) {
@@ -47,6 +58,7 @@ async function generate(useQuick = false, silent = false) {
   const payload = {
     text,
     quick: useQuick ? { direction: currentDirection, horizon_days: currentDays } : null,
+    asset: currentAsset,
   };
   lastPayload = payload;
   if (!silent) setLog("正在连接 Deribit 并生成策略...");
@@ -96,20 +108,22 @@ async function rerunLast() {
 
 async function refreshSpot() {
   try {
-    const response = await fetch("/api/spot");
+    const response = await fetch(`/api/spot?currency=${encodeURIComponent(currentAsset)}`);
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
-    $("spot").textContent = `BTC $${fmt(data.spot, 0)}`;
+    $("spot").textContent = `${data.currency || currentAsset} $${fmt(data.spot, 0)}`;
     if (!$("updatedAt").textContent || $("updatedAt").textContent === "尚未生成") {
       $("updatedAt").textContent = new Date(data.updated_at).toLocaleString();
     }
   } catch (error) {
-    $("spot").textContent = "BTC --";
+    $("spot").textContent = `${currentAsset} --`;
   }
 }
 
 function render(data) {
-  $("spot").textContent = `BTC $${fmt(data.market_meta.spot, 0)}`;
+  currentAsset = data.market_meta.currency || data.intent.asset || currentAsset;
+  $("assetGroup").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.asset === currentAsset));
+  $("spot").textContent = `${currentAsset} $${fmt(data.market_meta.spot, 0)}`;
   $("updatedAt").textContent = new Date(data.market_meta.updated_at).toLocaleString();
   $("llmBadge").textContent = data.market_meta.llm_enabled ? "LLM解析" : "规则解析";
   renderIntent(data.intent);
@@ -170,7 +184,7 @@ function renderStrategy(strategy) {
         <strong>${leg.instrument_name}</strong>
         <span>${leg.quantity}</span>
         <span>$${fmt(leg.strike, 0)}</span>
-        <span>${fmt(leg.price_btc, 4)} BTC · ${leg.price_source}</span>
+        <span>${fmt(leg.price_coin ?? leg.price_btc, 4)} ${strategy.asset} · ${leg.price_source}</span>
         <span>${fmt(leg.iv, 1)}%</span>
         <span>${fmt(leg.delta, 2)}</span>
       </div>`;

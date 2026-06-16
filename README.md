@@ -1,8 +1,8 @@
 # 加密期权策略宝 / Crypto Options Strategy Assistant
 
-一个本地优先的 BTC 期权策略助手。用户可以用快捷按钮或自然语言表达观点，系统会结合 Deribit 实时现货、期权链、IV、Skew、Gamma 和大额成交数据，生成一个具体的 Deribit 期权策略，并配套 payoff 图。
+一个本地优先的 BTC / ETH 期权策略助手。用户可以用快捷按钮或自然语言表达观点，系统会结合 Deribit 实时现货、期权链、IV、Skew、Gamma 和大额成交数据，生成一个具体的 Deribit 期权策略，并配套 payoff 图。
 
-A local-first BTC options strategy assistant. Users can express a view through quick buttons or natural language. The app combines real-time Deribit spot and options data, IV, skew, gamma, and large trade flow to generate one concrete Deribit options strategy with a payoff chart.
+A local-first BTC / ETH options strategy assistant. Users can express a view through quick buttons or natural language. The app combines real-time Deribit spot and options data, IV, skew, gamma, and large trade flow to generate one concrete Deribit options strategy with a payoff chart.
 
 > 本项目用于研究和教育，不构成投资建议。不接交易 API，不自动下单。
 >
@@ -10,7 +10,7 @@ A local-first BTC options strategy assistant. Users can express a view through q
 
 ## 功能 / Features
 
-- BTC-only MVP
+- BTC / ETH 标的切换
 - 快捷输入：看涨、看跌、看横盘
 - 时间范围：未来一周、未来一个月、未来三个月
 - 复杂输入框：支持用户输入更细的观点和目标价
@@ -24,7 +24,7 @@ A local-first BTC options strategy assistant. Users can express a view through q
 
 English:
 
-- BTC-only MVP
+- BTC / ETH asset switch
 - Quick input: bullish, bearish, range-bound
 - Horizon: one week, one month, three months
 - Free-form input for complex views and target prices
@@ -160,7 +160,7 @@ python run_server.py
   ↓
 LLM或规则解析成结构化意图
   ↓
-抓取 Deribit BTC 现货和期权链
+抓取 Deribit 所选标的的现货和期权链
   ↓
 Market Judgement Engine 综合研判
   ↓
@@ -180,7 +180,7 @@ User view
   ↓
 LLM or rule-based intent parsing
   ↓
-Fetch Deribit BTC spot and options chain
+Fetch Deribit spot and options chain for the selected asset
   ↓
 Market Judgement Engine
   ↓

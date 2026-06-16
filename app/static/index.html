@@ -4,18 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>冰火岛加密期权策略宝</title>
-    <link rel="stylesheet" href="/static/styles.css?v=7" />
+    <link rel="stylesheet" href="/static/styles.css?v=8" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
           <h1>冰火岛加密期权策略宝</h1>
-          <p>Crypto Options Strategy Assistant · 当前仅支持 BTC</p>
+          <p>Crypto Options Strategy Assistant · 当前支持 BTC / ETH</p>
         </div>
-        <div class="status">
-          <span id="spot">BTC --</span>
-          <span id="updatedAt">尚未生成</span>
+        <div class="top-actions">
+          <div class="asset-switch" id="assetGroup" aria-label="选择标的">
+            <button class="segment active" type="button" data-asset="BTC">BTC</button>
+            <button class="segment" type="button" data-asset="ETH">ETH</button>
+          </div>
+          <div class="status">
+            <span id="spot">BTC --</span>
+            <span id="updatedAt">尚未生成</span>
+          </div>
         </div>
       </header>
 
@@ -88,7 +94,7 @@
 
         <article class="panel">
           <div class="panel-head">
-            <h2>AI解释与风险</h2>
+            <h2>AI解读</h2>
             <span>教育用途</span>
           </div>
           <div id="explanation" class="explanation">输入观点后生成策略。</div>
@@ -107,6 +113,6 @@
       </footer>
     </main>
 
-    <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=8"></script>
   </body>
 </html>

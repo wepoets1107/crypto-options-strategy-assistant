@@ -1,8 +1,8 @@
 INTENT_SYSTEM_PROMPT = """
 You parse a beginner user's crypto options view into strict JSON.
-Only return JSON. Asset is always BTC for this MVP.
+Only return JSON. Asset is selected by the user and will be provided by the app.
 Fields:
-asset: BTC
+asset: BTC | ETH
 direction: bullish | bearish | range | volatile | unknown
 horizon_days: integer, default 30
 target_move_usd: number or null
@@ -24,5 +24,5 @@ Use this structure:
 2. Explain why the market data supports, partially supports, or does not support the user's view.
 3. Explain why this exact strategy was selected.
 4. Explain where it may make money, where it may lose money, and where the breakeven is.
-5. Mention this is not financial advice and the strategy can lose money.
+Do not repeat risk disclaimers such as "not financial advice" in the main explanation; the UI shows those reminders separately.
 """

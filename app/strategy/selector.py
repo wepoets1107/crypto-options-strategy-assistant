@@ -115,54 +115,58 @@ def risk_notes(strategy: str) -> list[str]:
     return notes
 
 
-MIN_BTC_OPTION_QUANTITY = 0.1
-DEFAULT_BTC_OPTION_QUANTITY = 0.1
+OPTION_QUANTITY_STEP = {"BTC": 0.1, "ETH": 1.0}
 
 
-def round_down_quantity(value: float) -> float:
-    if value < MIN_BTC_OPTION_QUANTITY:
+def quantity_step(asset: str) -> float:
+    return OPTION_QUANTITY_STEP.get(asset.upper(), 1.0)
+
+
+def round_down_quantity(value: float, step: float) -> float:
+    if value < step:
         return 0.0
-    return max(MIN_BTC_OPTION_QUANTITY, math.floor(value * 10) / 10)
+    return max(step, math.floor(value / step) * step)
 
 
-def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], capital_usd: float | None) -> dict[str, Any]:
+def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], capital_usd: float | None, asset: str) -> dict[str, Any]:
+    step = quantity_step(asset)
     max_loss = abs(float(payoff.get("estimated_min_pnl_usd") or 0))
     if not capital_usd or capital_usd <= 0:
         for item in legs:
-            item["quantity"] = DEFAULT_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
+            item["quantity"] = step * float(item.get("quantity") or 1)
         return {
             "capital_usd": None,
             "base_max_loss_usd": max_loss,
-            "recommended_quantity": DEFAULT_BTC_OPTION_QUANTITY,
+            "recommended_quantity": step,
             "adjusted": True,
             "insufficient": False,
-            "message": "用户没有提供资金规模；BTC 期权最小交易单位为 0.1，因此默认按 0.1 份策略展示。",
+            "message": f"用户没有提供资金规模；{asset} 期权最小交易单位按 {step:g} 份处理，因此默认按 {step:g} 份策略展示。",
         }
 
     if max_loss <= 0 or max_loss <= capital_usd:
-        default_loss = max_loss * DEFAULT_BTC_OPTION_QUANTITY
+        default_loss = max_loss * step
         for item in legs:
-            item["quantity"] = DEFAULT_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
+            item["quantity"] = step * float(item.get("quantity") or 1)
         return {
             "capital_usd": capital_usd,
             "base_max_loss_usd": max_loss,
-            "recommended_quantity": DEFAULT_BTC_OPTION_QUANTITY,
+            "recommended_quantity": step,
             "adjusted": True,
             "insufficient": False,
-            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；BTC 期权最小交易单位为 0.1，默认建议 0.1 份，对应最大亏损约 ${default_loss:,.0f}。",
+            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；{asset} 期权最小交易单位按 {step:g} 份处理，默认建议 {step:g} 份，对应最大亏损约 ${default_loss:,.0f}。",
         }
 
-    quantity = round_down_quantity(capital_usd / max_loss)
+    quantity = round_down_quantity(capital_usd / max_loss, step)
     if quantity <= 0:
         for item in legs:
-            item["quantity"] = MIN_BTC_OPTION_QUANTITY * float(item.get("quantity") or 1)
+            item["quantity"] = step * float(item.get("quantity") or 1)
         return {
             "capital_usd": capital_usd,
             "base_max_loss_usd": max_loss,
-            "recommended_quantity": MIN_BTC_OPTION_QUANTITY,
+            "recommended_quantity": step,
             "adjusted": True,
             "insufficient": True,
-            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；即使用最小 0.1 份，估算最大亏损也约 ${max_loss * MIN_BTC_OPTION_QUANTITY:,.0f}，高于你提供的 ${capital_usd:,.0f} 资金。",
+            "message": f"按 1 份策略估算最大亏损约 ${max_loss:,.0f}；即使用最小 {step:g} 份，估算最大亏损也约 ${max_loss * step:,.0f}，高于你提供的 ${capital_usd:,.0f} 资金。",
         }
     for item in legs:
         item["quantity"] = quantity * float(item.get("quantity") or 1)
@@ -178,17 +182,18 @@ def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], ca
 
 def select_strategy(market: dict[str, Any], intent: dict[str, Any], market_view: dict[str, Any]) -> dict[str, Any]:
     spot = float(market["spot"])
+    asset = str(market.get("currency") or intent.get("asset") or "BTC").upper()
     expiry = closest_expiry(market["options"], int(intent["horizon_days"]))
     strategy = choose_strategy_name(intent, market_view)
     legs = build_legs(strategy, market["options"], spot, expiry, intent.get("target_price"), intent.get("target_range"))
     payoff = build_payoff(legs, spot, intent.get("target_price"))
-    position_sizing = apply_position_sizing(legs, payoff, intent.get("capital_usd"))
+    position_sizing = apply_position_sizing(legs, payoff, intent.get("capital_usd"), asset)
     if position_sizing["adjusted"]:
         payoff = build_payoff(legs, spot, intent.get("target_price"))
     premium = premium_summary(legs, spot)
     return {
         "strategy_name": strategy,
-        "asset": "BTC",
+        "asset": asset,
         "expiry": expiry,
         "expiry_label": legs[0]["expiry_label"] if legs else "",
         "spot": spot,
