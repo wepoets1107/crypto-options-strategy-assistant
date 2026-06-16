@@ -13,10 +13,10 @@ A local-first BTC / ETH options strategy assistant. Users can express a view thr
 - BTC / ETH 标的切换
 - 快捷输入：看涨、看跌、看横盘
 - 时间范围：未来一周、未来一个月、未来三个月
-- 复杂输入框：支持用户输入更细的观点和目标价
+- 复杂输入框：由用户自己的大模型解析更细的观点和目标价
 - 手动生成策略
 - 用户自带 OpenAI-compatible LLM
-- 无 LLM 时自动使用规则解析
+- 无 LLM 时快捷观点仍可使用；复杂需求会提示先配置大模型
 - Deribit 真实期权合约选择
 - 唯一策略推荐，避免新手选择困难
 - Payoff 图展示收益和风险
@@ -27,10 +27,10 @@ English:
 - BTC / ETH asset switch
 - Quick input: bullish, bearish, range-bound
 - Horizon: one week, one month, three months
-- Free-form input for complex views and target prices
+- Free-form input for complex views and target prices, parsed by the user's own LLM
 - Manual strategy generation
 - User-provided OpenAI-compatible LLM
-- Rule-based fallback when no LLM is configured
+- Without an LLM, quick views still work; complex prompts ask the user to configure an LLM first
 - Concrete Deribit contract selection
 - One recommended strategy to avoid beginner choice overload
 - Payoff chart
@@ -107,9 +107,9 @@ LLM_API_KEY=your_api_key_here
 LLM_MODEL=your_model_name
 ```
 
-支持 OpenAI-compatible API。没有配置时，系统会使用规则解析和模板解释。
+支持 OpenAI-compatible API。没有配置时，快捷观点仍可使用；复杂需求不会再用规则硬猜，会提示先配置大模型。
 
-Any OpenAI-compatible API can be used. Without LLM configuration, the app falls back to rule-based parsing and template explanations.
+Any OpenAI-compatible API can be used. Without LLM configuration, quick views still work; complex prompts are not guessed by rules and will ask the user to configure an LLM first.
 
 ## 启动 / Run
 

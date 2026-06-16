@@ -108,7 +108,6 @@ def build_market_view(market: dict[str, Any], intent: dict[str, Any]) -> dict[st
         diagnostics.append(f"Gamma 位置：30D 内最大 Gamma 敞口在 ${max_gamma['strike']:,.0f} 附近，价格接近该区域时可能更容易反复。")
     return {
         "features": features,
-        "direction_confidence": round(score, 2),
         "alignment": alignment,
         "volatility_view": iv_view,
         "skew_view": "call_rich" if skew and skew > 0 else "put_rich" if skew and skew < 0 else "balanced",

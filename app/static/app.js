@@ -70,7 +70,7 @@ async function generate(useQuick = false, silent = false) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) throw new Error(await errorMessage(response));
     const data = await response.json();
     render(data);
     setLog(`${silent ? "默认策略已生成" : "策略已生成"}：${data.strategy.strategy_name}`);
@@ -95,7 +95,7 @@ async function rerunLast() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(lastPayload),
     });
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) throw new Error(await errorMessage(response));
     render(await response.json());
     setLog("5分钟自动更新完成。");
   } catch (error) {
@@ -103,6 +103,15 @@ async function rerunLast() {
   } finally {
     $("generateBtn").disabled = false;
     $("quickBtn").disabled = false;
+  }
+}
+
+async function errorMessage(response) {
+  try {
+    const payload = await response.json();
+    return payload.detail || JSON.stringify(payload);
+  } catch (error) {
+    return await response.text();
   }
 }
 
@@ -160,7 +169,6 @@ function renderIntent(intent) {
 }
 
 function renderMarket(view) {
-  $("confidence").textContent = `支持度 ${Math.round(view.direction_confidence * 100)}%`;
   const features = view.features;
   const rows = [
     `选择到期：${features.selected_expiry_label}，约 ${fmt(features.selected_expiry_days, 1)} 天`,

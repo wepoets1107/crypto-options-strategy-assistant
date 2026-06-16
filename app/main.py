@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -24,6 +24,15 @@ class GenerateRequest(BaseModel):
     text: str = ""
     quick: dict[str, Any] | None = None
     asset: str = "BTC"
+
+
+def infer_asset(selected: str, text: str) -> str:
+    upper_text = text.upper()
+    if "ETH" in upper_text or "以太坊" in text:
+        return "ETH"
+    if "BTC" in upper_text or "比特币" in text:
+        return "BTC"
+    return normalize_currency(selected)
 
 
 def fallback_explanation(intent: dict[str, Any], market_view: dict[str, Any], strategy: dict[str, Any]) -> str:
@@ -101,9 +110,20 @@ async def spot(currency: str = "BTC") -> JSONResponse:
 @app.post("/api/generate")
 async def generate_strategy(request: GenerateRequest) -> JSONResponse:
     settings = get_settings()
-    asset = normalize_currency(request.asset)
+    asset = infer_asset(request.asset, request.text)
+    require_llm = request.quick is None
+    if require_llm and not settings.llm_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="复杂需求需要先配置大模型。请在 .env 中填写 LLM_BASE_URL、LLM_API_KEY、LLM_MODEL 后重启服务；快捷观点仍可直接使用。",
+        )
     market = await fetch_market(asset)
-    intent = await parse_intent(request.text, request.quick, float(market["spot"]), settings, asset)
+    try:
+        intent = await parse_intent(request.text, request.quick, float(market["spot"]), settings, asset, require_llm=require_llm)
+    except Exception as exc:
+        if require_llm:
+            raise HTTPException(status_code=400, detail=f"大模型解析失败：{exc}") from exc
+        raise
     market_view = build_market_view(market, intent)
     strategy = select_strategy(market, intent, market_view)
     explanation = await explain(settings, intent, market_view, strategy)

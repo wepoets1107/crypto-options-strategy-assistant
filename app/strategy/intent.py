@@ -13,8 +13,8 @@ def _target_move_from_text(text: str) -> float | None:
     patterns = [
         r"(上涨|涨|上行|上冲|突破)\s*(\d+(?:\.\d+)?)\s*万",
         r"(下跌|跌|回落|跌破)\s*(\d+(?:\.\d+)?)\s*万",
-        r"(\d+(?:\.\d+)?)\s*万美元",
-        r"(\d+(?:\.\d+)?)\s*美元",
+        r"(上涨|涨|上行|上冲|突破)\s*(\d+(?:\.\d+)?)\s*(?:美元|美金|刀|u|U|USDT|usdt)",
+        r"(下跌|跌|回落|跌破)\s*(\d+(?:\.\d+)?)\s*(?:美元|美金|刀|u|U|USDT|usdt)",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
@@ -25,11 +25,25 @@ def _target_move_from_text(text: str) -> float | None:
     return None
 
 
+def _target_price_from_text(text: str) -> float | None:
+    text = text.replace(",", "")
+    patterns = [
+        r"(?:涨到|涨至|升到|升至|上看|看到|达到|到达|目标价(?:是|为|到)?|目标(?:是|为|到)?)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:美元|美金|刀|u|U|USDT|usdt)?",
+        r"(?:跌到|跌至|回落到|回落至|下看)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:美元|美金|刀|u|U|USDT|usdt)?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            number = float(match.group(1))
+            return number * 10000 if match.group(2) else number
+    return None
+
+
 def _capital_from_text(text: str) -> float | None:
     text = text.replace(",", "")
     capital_patterns = [
-        r"(?:我有|本金|资金|预算|仓位|账户)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
-        r"(?:我有|本金|资金|预算|仓位|账户)\D{0,8}?(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+        r"(?:我有|本金|资金|预算|仓位|账户|投入|投|拿出|计划投入)\s*(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+        r"(?:我有|本金|资金|预算|仓位|账户|投入|投|拿出|计划投入)\D{0,8}?(\d+(?:\.\d+)?)\s*(万)?\s*(?:u|U|USDT|usdt|美元|美金|刀)",
     ]
     for pattern in capital_patterns:
         match = re.search(pattern, text)
@@ -38,9 +52,8 @@ def _capital_from_text(text: str) -> float | None:
             return number * 10000 if match.group(2) else number
 
     patterns = [
-        r"(?:我有|本金|资金|预算|仓位|账户)\s*(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt|美元|美金|刀)",
+        r"(?:我有|本金|资金|预算|仓位|账户|投入|投|拿出|计划投入)\s*(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt|美元|美金|刀)",
         r"(\d+(?:\.\d+)?)\s*(?:u|U|USDT|usdt)\b",
-        r"(\d+(?:\.\d+)?)\s*(?:美元|美金|刀)",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
@@ -94,8 +107,8 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float, ass
     elif any(word in text for word in ["三个月", "3个月", "90天", "quarter"]):
         horizon_days = 90
 
-    target_move = _target_move_from_text(text)
-    target_price = None
+    target_price = _target_price_from_text(text)
+    target_move = None if target_price else _target_move_from_text(text)
     if target_move:
         if direction == "bearish":
             target_price = max(1, spot - target_move)
@@ -123,8 +136,9 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float, ass
 def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float, asset: str = "BTC") -> dict[str, Any]:
     direction = raw.get("direction") if raw.get("direction") in {"bullish", "bearish", "range", "volatile"} else fallback["direction"]
     horizon_days = int(raw.get("horizon_days") or fallback["horizon_days"] or 30)
-    target_move = raw.get("target_move_usd")
-    target_price = raw.get("target_price")
+    fallback_target_price = fallback.get("target_price")
+    target_price = raw.get("target_price") if raw.get("target_price") is not None else fallback_target_price
+    target_move = raw.get("target_move_usd") if fallback_target_price is None else fallback.get("target_move_usd")
     target_range = raw.get("target_range") or fallback.get("target_range")
     if target_price is None and target_move is not None:
         target_price = spot + float(target_move) if direction == "bullish" else spot - float(target_move)
@@ -142,7 +156,29 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float,
     }
 
 
-async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, settings: Settings, asset: str = "BTC") -> dict[str, Any]:
+def empty_fallback(text: str, quick: dict[str, Any] | None, asset: str) -> dict[str, Any]:
+    return {
+        "asset": asset,
+        "direction": (quick or {}).get("direction") or "unknown",
+        "horizon_days": int((quick or {}).get("horizon_days") or 30),
+        "target_move_usd": None,
+        "target_price": None,
+        "target_range": None,
+        "capital_usd": None,
+        "risk_profile": "beginner",
+        "income_preference": False,
+        "notes": text,
+    }
+
+
+async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, settings: Settings, asset: str = "BTC", require_llm: bool = False) -> dict[str, Any]:
+    if require_llm:
+        prompt_text = f"Selected asset: {asset}\nUser text: {text}"
+        raw = await chat_json(settings, INTENT_SYSTEM_PROMPT, prompt_text)
+        if not raw:
+            raise ValueError("大模型没有返回可用的 JSON 解析结果。")
+        return normalize_intent(raw, empty_fallback(text, quick, asset), spot, asset)
+
     fallback = parse_intent_rules(text, quick, spot, asset)
     if not settings.llm_enabled or not text.strip():
         return fallback

@@ -1,6 +1,6 @@
 INTENT_SYSTEM_PROMPT = """
 You parse a beginner user's crypto options view into strict JSON.
-Only return JSON. Asset is selected by the user and will be provided by the app.
+Only return JSON. The app provides "Selected asset" and "User text".
 Fields:
 asset: BTC | ETH
 direction: bullish | bearish | range | volatile | unknown
@@ -11,6 +11,12 @@ capital_usd: user's stated available capital in USD/USDT, number or null
 risk_profile: beginner | moderate | advanced
 income_preference: true if user wants to collect premium or sell options
 notes: short Chinese summary
+
+Important:
+- "涨到/涨至/达到 3000美元" means target_price = 3000, not target_move_usd = 3000.
+- "上涨/涨 3000美元" means target_move_usd = 3000.
+- "投入/本金/资金/预算 10000美元" means capital_usd = 10000.
+- If the user text explicitly says ETH or 以太坊, asset should be ETH. If it says BTC or 比特币, asset should be BTC. Otherwise use Selected asset.
 """
 
 
