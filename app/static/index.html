@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>冰火岛加密期权策略宝</title>
-    <link rel="stylesheet" href="/static/styles.css?v=9" />
+    <link rel="stylesheet" href="/static/styles.css?v=11" />
   </head>
   <body>
     <main class="shell">
@@ -107,11 +107,35 @@
       </section>
 
       <footer class="console">
-        <span>状态</span>
-        <div id="log">页面已加载。</div>
+        <div class="console-head">
+          <span>状态</span>
+          <div id="log">页面已加载。</div>
+        </div>
+        <div class="model-config">
+          <div class="model-status">
+            <strong id="modelStatus">模型状态：检查中</strong>
+            <span id="modelHint">复杂需求需要配置大模型。</span>
+          </div>
+          <div class="model-fields">
+            <label>
+              <span>Base URL</span>
+              <input id="llmBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off" />
+            </label>
+            <label>
+              <span>模型名称</span>
+              <input id="llmModel" type="text" placeholder="deepseek-v4-flash" autocomplete="off" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input id="llmApiKey" type="password" placeholder="只保存在本地 .env" autocomplete="new-password" />
+            </label>
+            <button id="testModelBtn" class="ghost" type="button">测试模型</button>
+            <button id="saveModelBtn" class="primary small-primary" type="button">保存配置</button>
+          </div>
+        </div>
       </footer>
     </main>
 
-    <script src="/static/app.js?v=9"></script>
+    <script src="/static/app.js?v=11"></script>
   </body>
 </html>

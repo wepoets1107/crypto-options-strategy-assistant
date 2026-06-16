@@ -62,6 +62,46 @@ def _capital_from_text(text: str) -> float | None:
     return None
 
 
+def _position_quantity_from_text(text: str, asset: str) -> float | None:
+    asset_pattern = rf"(?:{asset.upper()}|{asset.lower()}|{'以太坊' if asset.upper() == 'ETH' else '比特币'})"
+    patterns = [
+        rf"(?:我有|持有|手里有|仓位)\s*(\d+(?:\.\d+)?)\s*(?:个|枚|张|份)?\s*{asset_pattern}",
+        rf"(\d+(?:\.\d+)?)\s*(?:个|枚|张|份)?\s*{asset_pattern}",
+    ]
+    normalized = text.replace(",", "")
+    for pattern in patterns:
+        match = re.search(pattern, normalized, flags=re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def _position_avg_cost_from_text(text: str) -> float | None:
+    normalized = text.replace(",", "")
+    patterns = [
+        r"(?:均价|成本价|持仓成本|买入成本|成本)\s*(\d+(?:\.\d+)?)\s*(?:美元|美金|刀|u|U|USDT|usdt)?",
+        r"(?:均价|成本价|持仓成本|买入成本|成本)\D{0,4}?(\d+(?:\.\d+)?)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def _hedge_intent_from_text(text: str) -> bool:
+    return any(word in text for word in ["买保险", "保险", "保护", "锁住盈利", "锁定盈利", "对冲", "防跌", "保住利润"])
+
+
+def _number_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _money_amount(value: str, unit: str | None) -> float:
     number = float(value)
     return number * 10000 if unit == "万" else number
@@ -119,6 +159,10 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float, ass
     advanced = any(word in lower for word in ["advanced", "ratio", "short straddle", "short strangle"]) or any(
         word in text for word in ["高级", "比例价差", "裸卖", "双卖"]
     )
+    position_quantity = _position_quantity_from_text(text, asset)
+    hedge_intent = _hedge_intent_from_text(text)
+    if hedge_intent and direction == "unknown":
+        direction = "bearish"
     return {
         "asset": asset,
         "direction": direction,
@@ -127,6 +171,9 @@ def parse_intent_rules(text: str, quick: dict[str, Any] | None, spot: float, ass
         "target_price": target_price,
         "target_range": target_range,
         "capital_usd": _capital_from_text(text),
+        "position_quantity": position_quantity,
+        "position_avg_cost": _position_avg_cost_from_text(text) if position_quantity else None,
+        "hedge_intent": hedge_intent,
         "risk_profile": "advanced" if advanced else "beginner",
         "income_preference": income_preference,
         "notes": text or "快捷观点",
@@ -142,6 +189,15 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float,
     target_range = raw.get("target_range") or fallback.get("target_range")
     if target_price is None and target_move is not None:
         target_price = spot + float(target_move) if direction == "bullish" else spot - float(target_move)
+    position_quantity = _number_or_none(raw.get("position_quantity"))
+    if position_quantity is None:
+        position_quantity = fallback.get("position_quantity")
+    position_avg_cost = _number_or_none(raw.get("position_avg_cost"))
+    if position_avg_cost is None:
+        position_avg_cost = fallback.get("position_avg_cost")
+    hedge_intent = bool(raw.get("hedge_intent", fallback.get("hedge_intent", False)))
+    if hedge_intent and direction == "unknown":
+        direction = "bearish"
     return {
         "asset": asset,
         "direction": direction,
@@ -149,7 +205,10 @@ def normalize_intent(raw: dict[str, Any], fallback: dict[str, Any], spot: float,
         "target_move_usd": float(target_move) if target_move is not None else fallback.get("target_move_usd"),
         "target_price": float(target_price) if target_price is not None else fallback.get("target_price"),
         "target_range": target_range,
-        "capital_usd": float(raw.get("capital_usd")) if raw.get("capital_usd") is not None else fallback.get("capital_usd"),
+        "capital_usd": _number_or_none(raw.get("capital_usd")) if raw.get("capital_usd") is not None else fallback.get("capital_usd"),
+        "position_quantity": position_quantity,
+        "position_avg_cost": position_avg_cost,
+        "hedge_intent": hedge_intent,
         "risk_profile": raw.get("risk_profile") or fallback.get("risk_profile", "beginner"),
         "income_preference": bool(raw.get("income_preference", fallback.get("income_preference", False))),
         "notes": raw.get("notes") or fallback.get("notes", ""),
@@ -165,6 +224,9 @@ def empty_fallback(text: str, quick: dict[str, Any] | None, asset: str) -> dict[
         "target_price": None,
         "target_range": None,
         "capital_usd": None,
+        "position_quantity": None,
+        "position_avg_cost": None,
+        "hedge_intent": False,
         "risk_profile": "beginner",
         "income_preference": False,
         "notes": text,
@@ -177,7 +239,9 @@ async def parse_intent(text: str, quick: dict[str, Any] | None, spot: float, set
         raw = await chat_json(settings, INTENT_SYSTEM_PROMPT, prompt_text)
         if not raw:
             raise ValueError("大模型没有返回可用的 JSON 解析结果。")
-        return normalize_intent(raw, empty_fallback(text, quick, asset), spot, asset)
+        # LLM is the primary parser for complex prompts. Rule parsing only fills
+        # obviously stated numbers if the model omits a structured field.
+        return normalize_intent(raw, parse_intent_rules(text, quick, spot, asset), spot, asset)
 
     fallback = parse_intent_rules(text, quick, spot, asset)
     if not settings.llm_enabled or not text.strip():

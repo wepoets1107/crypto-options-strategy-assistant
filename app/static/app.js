@@ -16,8 +16,159 @@ function money(value) {
   return `${sign}$${fmt(Math.abs(Number(value)), 0)}`;
 }
 
+function qty(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  return fmt(value, Number.isInteger(Number(value)) ? 0 : 2);
+}
+
 function setLog(message) {
   $("log").textContent = message;
+}
+
+function setModelStatus(config, message = "") {
+  const configured = Boolean(config?.configured);
+  $("modelStatus").textContent = configured
+    ? `模型状态：已配置 ${config.model || ""}`
+    : "模型状态：未配置";
+  $("modelHint").textContent = message || (configured
+    ? `复杂需求会使用本地保存的模型配置，API Key：${config.api_key_masked || "已保存"}`
+    : "复杂需求需要先填写模型名称和 API Key；快捷观点不受影响。");
+  if (config?.base_url) $("llmBaseUrl").value = config.base_url;
+  if (config?.model) $("llmModel").value = config.model;
+  $("llmApiKey").placeholder = config?.api_key_masked ? `已保存：${config.api_key_masked}` : "只保存在本地 .env";
+}
+
+async function loadModelConfig() {
+  try {
+    const response = await fetch("/api/llm/config");
+    if (!response.ok) throw new Error(await errorMessage(response));
+    setModelStatus(await response.json());
+  } catch (error) {
+    setModelStatus({ configured: false }, `模型状态读取失败：${error.message}`);
+  }
+}
+
+function modelPayload() {
+  return {
+    base_url: $("llmBaseUrl").value.trim(),
+    model: $("llmModel").value.trim(),
+    api_key: $("llmApiKey").value.trim(),
+  };
+}
+
+async function testModelConfig() {
+  $("testModelBtn").disabled = true;
+  setLog("正在测试模型连接...");
+  try {
+    const response = await fetch("/api/llm/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(modelPayload()),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    const data = await response.json();
+    setLog(data.message || "模型连接正常。");
+    $("modelHint").textContent = data.message || "模型连接正常。";
+  } catch (error) {
+    setLog(`模型测试失败：${error.message}`);
+    $("modelHint").textContent = `模型测试失败：${error.message}`;
+  } finally {
+    $("testModelBtn").disabled = false;
+  }
+}
+
+async function saveModelConfig() {
+  $("saveModelBtn").disabled = true;
+  setLog("正在保存模型配置到本地...");
+  try {
+    const response = await fetch("/api/llm/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(modelPayload()),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    const data = await response.json();
+    $("llmApiKey").value = "";
+    setModelStatus(data, data.message || "模型配置已保存。");
+    setLog(data.message || "模型配置已保存。");
+  } catch (error) {
+    setLog(`模型配置保存失败：${error.message}`);
+    $("modelHint").textContent = `模型配置保存失败：${error.message}`;
+  } finally {
+    $("saveModelBtn").disabled = false;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+
+function renderMarkdown(markdown) {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const html = [];
+  let listType = null;
+  const closeList = () => {
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = null;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const level = Math.min(heading[1].length + 2, 5);
+      html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+    if (/^---+$/.test(line)) {
+      closeList();
+      html.push("<hr>");
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      if (listType !== "ul") {
+        closeList();
+        html.push("<ul>");
+        listType = "ul";
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    const numbered = line.match(/^\d+\.\s+(.+)$/);
+    if (numbered) {
+      if (listType !== "ol") {
+        closeList();
+        html.push("<ol>");
+        listType = "ol";
+      }
+      html.push(`<li>${inlineMarkdown(numbered[1])}</li>`);
+      continue;
+    }
+    closeList();
+    html.push(`<p>${inlineMarkdown(line)}</p>`);
+  }
+  closeList();
+  return html.join("");
 }
 
 function activeButton(group, attr) {
@@ -138,7 +289,7 @@ function render(data) {
   renderIntent(data.intent);
   renderMarket(data.market_view);
   renderStrategy(data.strategy);
-  $("explanation").textContent = data.explanation;
+  $("explanation").innerHTML = renderMarkdown(data.explanation);
   $("riskList").innerHTML = data.strategy.risk_notes.map((note) => `<li>${note}</li>`).join("");
 }
 
@@ -154,6 +305,7 @@ function renderIntent(intent) {
   const rangeText = intent.target_range?.lower && intent.target_range?.upper
     ? `$${fmt(intent.target_range.lower, 0)} - $${fmt(intent.target_range.upper, 0)}`
     : "--";
+  const holdingText = intent.position_quantity ? `${qty(intent.position_quantity)} ${intent.asset}` : "--";
   $("intentBox").innerHTML = [
     ["标的", intent.asset],
     ["方向", labels[intent.direction] || intent.direction],
@@ -162,6 +314,9 @@ function renderIntent(intent) {
     ["目标区间", rangeText],
     ["目标涨跌", intent.target_move_usd ? `$${fmt(intent.target_move_usd, 0)}` : "--"],
     ["资金规模", intent.capital_usd ? `$${fmt(intent.capital_usd, 0)}` : "--"],
+    ["持仓数量", holdingText],
+    ["持仓均价", intent.position_avg_cost ? `$${fmt(intent.position_avg_cost, 0)}` : "--"],
+    ["保护意图", intent.hedge_intent ? "是" : "否"],
     ["风险偏好", riskLabels[intent.risk_profile] || intent.risk_profile],
   ]
     .map(([key, value]) => `<div><span>${key}</span><strong>${value}</strong></div>`)
@@ -250,7 +405,6 @@ function renderPayoff(payoff) {
     <text class="chart-text" x="${pad.left}" y="${height - 12}">$${fmt(minX, 0)}</text>
     <text class="chart-text" x="${width - pad.right - 68}" y="${height - 12}">$${fmt(maxX, 0)}</text>
     <text class="chart-text strong" x="${spotX + 4}" y="30">Spot $${fmt(payoff.markers.spot, 0)}</text>
-    <text class="chart-text strong" x="${spotX + 4}" y="${height - 42}">Spot</text>
     ${targetX ? `<text class="chart-text strong" x="${targetX + 4}" y="48">Target $${fmt(payoff.markers.target, 0)}</text>
     <text class="chart-text strong" x="${targetX + 4}" y="${height - 42}">Target</text>` : ""}
     <text class="chart-text" x="8" y="${y(maxY) + 4}">${money(maxY)}</text>
@@ -262,7 +416,10 @@ function renderPayoff(payoff) {
 setupSegments();
 $("quickBtn").addEventListener("click", () => generate(true));
 $("generateBtn").addEventListener("click", () => generate(false));
+$("testModelBtn").addEventListener("click", testModelConfig);
+$("saveModelBtn").addEventListener("click", saveModelConfig);
 
+loadModelConfig();
 refreshSpot();
 generate(true, true);
 window.setInterval(refreshSpot, 60 * 1000);

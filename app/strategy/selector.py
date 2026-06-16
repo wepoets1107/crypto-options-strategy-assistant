@@ -16,6 +16,8 @@ def choose_strategy_name(intent: dict[str, Any], market_view: dict[str, Any]) ->
     target = intent.get("target_price")
     note = str(intent.get("notes") or "")
 
+    if intent.get("hedge_intent") and intent.get("position_quantity"):
+        return "Bear Put Spread" if iv_view in {"expensive", "normal"} else "Long Put"
     if "铁蝶" in note or "iron butterfly" in note.lower():
         return "Iron Butterfly"
     if "比例" in note or "ratio" in note.lower():
@@ -128,9 +130,42 @@ def round_down_quantity(value: float, step: float) -> float:
     return max(step, math.floor(value / step) * step)
 
 
-def apply_position_sizing(legs: list[dict[str, Any]], payoff: dict[str, Any], capital_usd: float | None, asset: str) -> dict[str, Any]:
+def apply_position_sizing(
+    legs: list[dict[str, Any]],
+    payoff: dict[str, Any],
+    capital_usd: float | None,
+    asset: str,
+    position_quantity: float | None = None,
+    position_avg_cost: float | None = None,
+    hedge_intent: bool = False,
+    spot: float | None = None,
+) -> dict[str, Any]:
     step = quantity_step(asset)
     max_loss = abs(float(payoff.get("estimated_min_pnl_usd") or 0))
+    if hedge_intent and position_quantity and position_quantity > 0:
+        quantity = round_down_quantity(float(position_quantity), step)
+        if quantity <= 0:
+            quantity = step
+        for item in legs:
+            item["quantity"] = quantity * float(item.get("quantity") or 1)
+        loss_text = f"估算最大保险成本约 ${max_loss * quantity:,.0f}"
+        value_text = ""
+        if spot:
+            position_value = float(position_quantity) * float(spot)
+            cost_ratio = (max_loss * quantity / position_value * 100) if position_value else 0
+            value_text = f"，约占当前持仓市值的 {cost_ratio:.1f}%"
+        avg_text = f"，均价约 ${position_avg_cost:,.0f}" if position_avg_cost else ""
+        return {
+            "capital_usd": capital_usd,
+            "position_quantity": float(position_quantity),
+            "position_avg_cost": position_avg_cost,
+            "base_max_loss_usd": max_loss,
+            "recommended_quantity": quantity,
+            "adjusted": True,
+            "insufficient": False,
+            "message": f"识别到你持有 {position_quantity:g} {asset}{avg_text}；本策略按 {quantity:g} 份 {asset} 期权做保护性对冲展示，{loss_text}{value_text}。",
+        }
+
     if not capital_usd or capital_usd <= 0:
         for item in legs:
             item["quantity"] = step * float(item.get("quantity") or 1)
@@ -187,7 +222,16 @@ def select_strategy(market: dict[str, Any], intent: dict[str, Any], market_view:
     strategy = choose_strategy_name(intent, market_view)
     legs = build_legs(strategy, market["options"], spot, expiry, intent.get("target_price"), intent.get("target_range"))
     payoff = build_payoff(legs, spot, intent.get("target_price"))
-    position_sizing = apply_position_sizing(legs, payoff, intent.get("capital_usd"), asset)
+    position_sizing = apply_position_sizing(
+        legs,
+        payoff,
+        intent.get("capital_usd"),
+        asset,
+        intent.get("position_quantity"),
+        intent.get("position_avg_cost"),
+        bool(intent.get("hedge_intent")),
+        spot,
+    )
     if position_sizing["adjusted"]:
         payoff = build_payoff(legs, spot, intent.get("target_price"))
     premium = premium_summary(legs, spot)

@@ -129,6 +129,16 @@ button,
   font-weight: 700;
 }
 
+.ghost {
+  background: #eef3f8;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.small-primary {
+  min-height: 36px;
+}
+
 .primary {
   background: var(--blue);
   color: #fff;
@@ -333,9 +343,43 @@ textarea:focus {
 }
 
 .explanation {
-  white-space: pre-wrap;
   line-height: 1.6;
   font-size: 13px;
+}
+
+.explanation h3,
+.explanation h4,
+.explanation h5 {
+  margin: 14px 0 7px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.explanation p {
+  margin: 0 0 10px;
+}
+
+.explanation ul,
+.explanation ol {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+}
+
+.explanation li {
+  margin: 4px 0;
+}
+
+.explanation hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+}
+
+.explanation code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--soft);
+  font-family: "Segoe UI", Consolas, monospace;
 }
 
 .risk-list {
@@ -362,13 +406,72 @@ textarea:focus {
 }
 
 .console {
+  min-height: 48px;
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+.console-head {
   display: grid;
   grid-template-columns: 48px 1fr;
   gap: 10px;
   align-items: center;
-  min-height: 48px;
-  margin-top: 14px;
-  padding: 12px 14px;
+}
+
+.model-config {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.model-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.model-status strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.model-status span {
+  text-align: right;
+}
+
+.model-fields {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(160px, 0.8fr) minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.model-fields label {
+  display: grid;
+  gap: 5px;
+}
+
+.model-fields label span {
+  font-size: 12px;
+}
+
+.model-fields input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fbfcfe;
+  font: inherit;
+}
+
+.model-fields input:focus {
+  border-color: var(--blue);
+  outline: none;
 }
 
 @media (max-width: 980px) {
@@ -395,6 +498,19 @@ textarea:focus {
 
   .leg-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .model-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .model-status span {
+    text-align: left;
+  }
+
+  .model-fields {
+    grid-template-columns: 1fr;
   }
 
   .leg-row.header {

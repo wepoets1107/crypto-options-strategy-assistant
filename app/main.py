@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.config import STATIC_DIR, get_settings
+from app.config import STATIC_DIR, get_settings, write_llm_config
+from app.llm.client import chat_json
 from app.llm.client import chat_text
 from app.llm.prompts import EXPLANATION_SYSTEM_PROMPT
 from app.market_data.deribit import fetch_market, fetch_spot, normalize_currency
@@ -24,6 +25,30 @@ class GenerateRequest(BaseModel):
     text: str = ""
     quick: dict[str, Any] | None = None
     asset: str = "BTC"
+
+
+class LlmConfigRequest(BaseModel):
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+
+
+def mask_api_key(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 10:
+        return value[:2] + "****"
+    return f"{value[:3]}****{value[-5:]}"
+
+
+def llm_status_payload() -> dict[str, Any]:
+    settings = get_settings()
+    return {
+        "configured": settings.llm_enabled,
+        "base_url": settings.llm_base_url,
+        "model": settings.llm_model,
+        "api_key_masked": mask_api_key(settings.llm_api_key),
+    }
 
 
 def infer_asset(selected: str, text: str) -> str:
@@ -100,6 +125,39 @@ async def index_page() -> FileResponse:
 @app.get("/api/health")
 async def health() -> JSONResponse:
     return JSONResponse({"ok": True, "service": "Crypto Options Strategy Assistant"})
+
+
+@app.get("/api/llm/config")
+async def get_llm_config() -> JSONResponse:
+    return JSONResponse(llm_status_payload())
+
+
+@app.post("/api/llm/test")
+async def test_llm_config(request: LlmConfigRequest) -> JSONResponse:
+    settings = get_settings()
+    base_url = request.base_url.strip().rstrip("/") or settings.llm_base_url
+    api_key = request.api_key.strip() or settings.llm_api_key
+    model = request.model.strip() or settings.llm_model
+    if not (base_url and api_key and model):
+        raise HTTPException(status_code=400, detail="请先填写 Base URL、模型名称和 API Key。")
+    test_settings = type(settings)(llm_base_url=base_url, llm_api_key=api_key, llm_model=model, llm_enabled=True)
+    try:
+        payload = await chat_json(test_settings, "Return JSON only: {\"ok\": true}.", "ping")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"模型连接失败：{exc}") from exc
+    return JSONResponse({"ok": bool(payload), "message": "模型连接正常。"})
+
+
+@app.post("/api/llm/config")
+async def save_llm_config(request: LlmConfigRequest) -> JSONResponse:
+    current = get_settings()
+    base_url = request.base_url.strip().rstrip("/") or current.llm_base_url
+    api_key = request.api_key.strip() or current.llm_api_key
+    model = request.model.strip() or current.llm_model
+    if not (base_url and api_key and model):
+        raise HTTPException(status_code=400, detail="请填写完整的 Base URL、模型名称和 API Key。")
+    write_llm_config(base_url, api_key, model)
+    return JSONResponse({**llm_status_payload(), "message": "模型配置已保存。"})
 
 
 @app.get("/api/spot")
